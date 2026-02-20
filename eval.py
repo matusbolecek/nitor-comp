@@ -1,10 +1,5 @@
+from sklearn.metrics import mean_squared_error
 import numpy as np
 
-class Evals:
-    def __init__(self, test_set):
-        pass
-
-    def rmse(self):
-        pass
-
-    
+def rmse(actual_array, model_array):
+    return np.sqrt(mean_squared_error(actual_array, model_array))

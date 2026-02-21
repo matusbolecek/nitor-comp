@@ -4,7 +4,6 @@ import joblib
 from sklearn.linear_model import RidgeCV, LinearRegression
 import xgboost as xgb
 import matplotlib.pyplot as plt
-from dataengineers import build_train_test_alt
 
 class Linear:
     def __init__(self, features: list):
@@ -50,49 +49,34 @@ class Linear:
 
 class XGB:
     def __init__(self, features: list):
-        self.scaler = joblib.load('bin/scaler1.pkl')
-        self.scaler_features = joblib.load('bin/features1.pkl') # might break otherwise, but not an optimal solution for sure
         self.model = None
         self.features = features
 
-    def process(self, df: pd.DataFrame):
-        df[self.scaler_features] = self.scaler.transform(df[self.scaler_features])
-
-        return df
-
-    def fit(self, df: pd.DataFrame):
-        df_train, df_test = build_train_test_alt(df)
-        
-        X_train = df_train[self.features]
+    def fit(self, df_train, df_test):
+        X_train = df_train[self.features + ['market_int']]
         y_train = df_train['target']
-
-        X_test = df_test[self.features]
+        X_test = df_test[self.features + ['market_int']]
         y_test = df_test['target']
 
         self.model = xgb.XGBRegressor(
             device="cuda",
             objective='reg:squarederror',
-            tree_method="hist",
-            n_estimators=5000,
+            n_estimators=2000,
             learning_rate=0.05,
-            max_depth=8,
+            max_depth=9,
             subsample=0.8,
             colsample_bytree=0.8,
-            enable_categorical=True,
-            early_stopping_rounds=50,
             random_state=42
         )
 
         self.model.fit(
             X_train, y_train,
-            eval_set=[(X_train, y_train), (X_test, y_test)],
+            eval_set=[(X_test, y_test)],
             verbose=100
         )
 
-    def predict(self, df: pd.DataFrame):
-        X_predict = df[self.features]
-        y_pred = self.model.predict(X_predict)
-
+    def predict(self, df):
+        y_pred = self.model.predict(df[self.features + ['market_int']])
         return y_pred
 
     def stats(self):

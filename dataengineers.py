@@ -88,10 +88,18 @@ class Dataset:
             self.df = self.df[train_cols + [c for c in self.df.columns if c not in train_cols]]
             self.df[train_cols] = self.scaler.transform(self.df[train_cols])
 
+    def _drop_cols(self):
+            cols_drop = ['delivery_end'] # might be expanded later idk
+            
+            self.df = self.df.drop(columns=cols_drop, errors='ignore')
+
+            return self.df
+
     def build_main(self):
         self._process_dates()   
         self._clean_fill()
         self._create_features()
+        self._drop_cols()
         self._encode_and_scale()
 
         if 'target' in self.df.columns:

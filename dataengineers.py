@@ -1,12 +1,21 @@
 import pandas as pd
 from typing import Literal
 import numpy as np
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+import joblib
 
 class Dataset:
     def __init__(self, df_type: Literal['train', 'test']):
         self.type = df_type
-        self.path = 'data/train.csv' if self.type == 'train' else 'data/test.csv'
+        self.path = 'data/train.csv' if self.type == 'train' else 'data/test_for_participants.csv'
         self.df = pd.read_csv(self.path)
+        
+        if self.type == 'train':
+            self.scaler = StandardScaler()
+            self.le_market = LabelEncoder()
+        else:
+            self.scaler = joblib.load('bin/scaler_main.pkl')
+            self.le_market = joblib.load('bin/le_market.pkl')
 
     def _process_dates(self):
         self.df['delivery_start'] = pd.to_datetime(self.df['delivery_start'], utc=True)
@@ -15,76 +24,75 @@ class Dataset:
         return self.df
 
     def _clean_fill(self):
-        cols_to_exclude = ['id', 'delivery_end']
+        markets = self.df['market'].unique()
+        time_range = pd.date_range(
+            start=self.df['delivery_start'].min(),
+            end=self.df['delivery_start'].max(),
+            freq='h'
+        )
         
-        exclude_existing = [c for c in cols_to_exclude if c in self.df.columns]
+        grid = pd.MultiIndex.from_product([markets, time_range], names=['market', 'delivery_start'])
+        df_grid = pd.DataFrame(index=grid).reset_index()
         
-        df_subset = self.df.drop(columns=exclude_existing)
+        self.df = pd.merge(df_grid, self.df, on=['market', 'delivery_start'], how='left')
         
-        df_pivoted = df_subset.pivot(index='delivery_start', columns='market')
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        cols_to_interp = [c for c in numeric_cols if c not in ['id', 'target']]
         
-        df_pivoted = df_pivoted.resample('h').asfreq()
-        df_pivoted = df_pivoted.interpolate(method='linear', limit_direction='both')
-        df_pivoted = df_pivoted.ffill().bfill()
+        self.df[cols_to_interp] = self.df.groupby('market')[cols_to_interp].transform(
+            lambda x: x.interpolate(method='linear', limit_direction='both')
+        )
         
-        df_clean = df_pivoted.stack(future_stack=True).reset_index()
+        self.df[cols_to_interp] = self.df[cols_to_interp].fillna(0) # should be clean, but we hard fil just in case
         
-        if 'id' in self.df.columns:
-            df_clean = df_clean.merge(
-                self.df[['delivery_start', 'market', 'id']], 
-                on=['delivery_start', 'market'], 
-                how='left'
-            )
-            
-        self.df = df_clean
         return self.df
 
     def _create_features(self):
-        self.df = self.df.sort_values(['market', 'delivery_start'])
         self.df['hour'] = self.df['delivery_start'].dt.hour
         self.df['dayofweek'] = self.df['delivery_start'].dt.dayofweek
         self.df['month'] = self.df['delivery_start'].dt.month
 
-        self.df['hour_sin'] = np.sin(2 * np.pi * self.df['hour'] / 24)
-        self.df['hour_cos'] = np.cos(2 * np.pi * self.df['hour'] / 24)
-        self.df['month_sin'] = np.sin(2 * np.pi * self.df['month'] / 12)
-        self.df['month_cos'] = np.cos(2 * np.pi * self.df['month'] / 12)
+        for col, max_val in [('hour', 24), ('dayofweek', 7), ('month', 12)]:
+            self.df[f'{col}_sin'] = np.sin(2 * np.pi * self.df[col] / max_val)
+            self.df[f'{col}_cos'] = np.cos(2 * np.pi * self.df[col] / max_val)
 
         self.df['residual'] = self.df['load_forecast'] - (self.df['solar_forecast'] + self.df['wind_forecast'])
-        self.df['renewable_ratio'] = (self.df['solar_forecast'] + self.df['wind_forecast']) / (self.df['load_forecast'] + 1)
+        
+        self.df['renewable_ratio'] = (self.df['solar_forecast'] + self.df['wind_forecast']) / (self.df['load_forecast'] + 10)
+        
+        weather_cols = ['air_temperature_2m', 'wind_speed_10m', 'residual']
+        for col in weather_cols:
+            self.df[f'{col}_roll_6_mean'] = self.df.groupby('market')[col].transform(lambda x: x.rolling(6, min_periods=1).mean()).fillna(0)
 
-        for col in ['air_temperature_2m', 'wind_speed_10m', 'residual']:
-            self.df[f'{col}_roll_6_mean'] = self.df.groupby('market')[col].transform(lambda x: x.rolling(6, min_periods=1).mean())
-            self.df[f'{col}_roll_24_std'] = self.df.groupby('market')[col].transform(lambda x: x.rolling(24, min_periods=1).std())
+    def _encode_and_scale(self):
+        if self.type == 'train':
+            self.df['market_int'] = self.le_market.fit_transform(self.df['market'])
+            joblib.dump(self.le_market, 'bin/le_market.pkl')
+        else:
+            self.df['market_int'] = self.le_market.transform(self.df['market'])
 
-    def _drop_cols(self):
-        cols_drop = [
-            'delivery_end',
+        exclude_cols = ['id', 'delivery_start', 'market', 'market_int', 'target', 'delivery_end']
+        feature_cols = [c for c in self.df.columns if c not in exclude_cols]
+        self.feature_names = feature_cols
 
-            'hour', 'month',
-            
-            # radiation, clouds (captured by solar_forecast)
-            'global_horizontal_irradiance', 'diffuse_horizontal_irradiance', 'direct_normal_irradiance',
-            'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high', 'cloud_cover_total',
-            
-            # temperature variations (keep air_temperature_2m)
-            'apparent_temperature_2m', 'dew_point_temperature_2m', 'wet_bulb_temperature_2m', 
-            
-            # atmospheric stability
-            'convective_available_potential_energy', 'lifted_index', 'convective_inhibition', 'freezing_level_height',
-            
-            # wind Details (keep speed_10m and wind_forecast)
-            'wind_gust_speed_10m', 'wind_speed_80m', 'wind_direction_80m', 
-            'visibility', 'surface_pressure'
-        ]
+        if self.type == 'train':
+            self.df[feature_cols] = self.scaler.fit_transform(self.df[feature_cols])
+            joblib.dump(self.scaler, 'bin/scaler_main.pkl')
+            joblib.dump(feature_cols, 'bin/feature_names.pkl')
+        else:
+            train_cols = joblib.load('bin/feature_names.pkl')
+            for c in train_cols:
+                if c not in self.df.columns:
+                    self.df[c] = 0
 
-        self.df = self.df.drop(columns=cols_drop, errors='ignore')
+            self.df = self.df[train_cols + [c for c in self.df.columns if c not in train_cols]]
+            self.df[train_cols] = self.scaler.transform(self.df[train_cols])
 
     def build_main(self):
         self._process_dates()   
         self._clean_fill()
         self._create_features()
-        self._drop_cols()
+        self._encode_and_scale()
 
         if 'target' in self.df.columns:
             self.df = self.df.dropna(subset=['target'])

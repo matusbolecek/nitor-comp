@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 class Dataset:
     def __init__(self, df_type: Literal['train', 'test']):
         self.type = df_type
-        self.path = 'data/train.csv' if self.type == 'train' else 'data/test.csv'
+        self.path = 'data/train.csv' if self.type == 'train' else 'data/test_for_participants.csv'
         self.df = pd.read_csv(self.path)
 
     def _process_dates(self):
@@ -42,9 +42,14 @@ class Dataset:
         self.df['net_load'] = self.df['load_forecast'] - self.df['renewables']
         
         self.df['renewable_ratio'] = self.df['renewables'] / (self.df['load_forecast'] + 1)
+
+        self.df['residual'] = self.df['load_forecast'] - self.df['wind_forecast'] - self.df['solar_forecast']
         
         if 'air_temperature_2m' in self.df.columns:
-            self.df['cold_stress'] = self.df['air_temperature_2m'].apply(lambda x: max(0, 280 - x)) 
+            self.df['cold_stress'] = self.df['air_temperature_2m'].apply(lambda x: max(0, 280 - x))
+
+        self.df['wind_dir_sin'] = np.sin(2 * np.pi * self.df['wind_direction_80m'] / 360)
+        self.df['wind_dir_cos'] = np.cos(2 * np.pi * self.df['wind_direction_80m'] / 360)
         
         le = LabelEncoder()
         self.df['market_int'] = le.fit_transform(self.df['market'])
@@ -101,3 +106,11 @@ class Dataset:
         test = df.iloc[train_size:].copy()
         
         return train, test
+    
+def build_train_test_alt(df):
+
+    train_size = int(len(df) * 0.8)
+    train = df.iloc[:train_size].copy()
+    test = df.iloc[train_size:].copy()
+
+    return train, test

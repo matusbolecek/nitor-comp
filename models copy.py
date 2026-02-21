@@ -51,25 +51,50 @@ class Linear:
 class XGB:
     def __init__(self, features: list):
         self.model = None
-        self.features = list(dict.fromkeys(features))
+        self.features = [f for f in features if f not in ['id', 'target', 'month', 'net_load_sq', 'net_load_cubed']]
+        self.means = {}
+        self.stds = {}
 
     def fit(self, df_train, df_test):
         X_train = df_train[self.features]
         X_test = df_test[self.features]
+
+        df_train = df_train.copy()
+        df_test = df_test.copy()
         
-        y_train = np.arcsinh(df_train['target']) 
-        y_test = np.arcsinh(df_test['target'])
+        df_train['target_scaled'] = 0.0
+        df_test['target_scaled'] = 0.0
+        
+        unique_markets = df_train['market_int'].unique()
+        
+        for m in unique_markets:
+            mask = df_train['market_int'] == m
+            mu = df_train.loc[mask, 'target'].mean()
+            sigma = df_train.loc[mask, 'target'].std()
+            
+            self.means[m] = mu
+            self.stds[m] = sigma
+            
+            df_train.loc[mask, 'target_scaled'] = (df_train.loc[mask, 'target'] - mu) / sigma
+            
+            mask_test = df_test['market_int'] == m
+            if mask_test.any():
+                df_test.loc[mask_test, 'target_scaled'] = (df_test.loc[mask_test, 'target'] - mu) / sigma
+
+        y_train = df_train['target_scaled']
+        y_test = df_test['target_scaled']
 
         self.model = xgb.XGBRegressor(
             device="cuda",
-            objective='reg:squarederror',
             n_estimators=5000,
-            learning_rate=0.01,
-            max_depth=7,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            reg_alpha=0.1,
-            reg_lambda=1.0,
+            learning_rate=0.05,
+            max_depth=6,
+            min_child_weight=10,
+            subsample=0.6,
+            colsample_bytree=0.6,
+            reg_alpha=1.0,
+            reg_lambda=2.0,
+            objective='reg:squarederror',
             early_stopping_rounds=100,
             random_state=42
         )
@@ -83,11 +108,21 @@ class XGB:
     def predict(self, df):
         X_predict = df[self.features]
         
-        y_pred_trans = self.model.predict(X_predict)
+        y_pred_scaled = self.model.predict(X_predict)
         
-        y_pred = np.sinh(y_pred_trans)
+        # inverse transform (per market)
+        df_temp = df.copy()
+        df_temp['pred_scaled'] = y_pred_scaled
+        df_temp['final_pred'] = 0.0
         
-        return y_pred
+        for m in self.means:
+            mask = df_temp['market_int'] == m
+            if mask.any():
+                mu = self.means[m]
+                sigma = self.stds[m]
+                df_temp.loc[mask, 'final_pred'] = (df_temp.loc[mask, 'pred_scaled'] * sigma) + mu
+                
+        return df_temp['final_pred'].values
 
     def stats(self):
         xgb.plot_importance(self.model, max_num_features=20, importance_type='gain')

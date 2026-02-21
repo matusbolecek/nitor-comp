@@ -1,0 +1,3 @@
+new feature: residual_demand = demand_forecast - wind_forecast - solar_forecast
+
+cleanup 

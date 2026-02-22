@@ -97,10 +97,13 @@ class XGB:
         
         return y_pred
 
-    def stats(self):
-        xgb.plot_importance(self.model, max_num_features=20, importance_type='gain')
+    def stats(self, n=20):
+        xgb.plot_importance(self.model, max_num_features=n, importance_type='gain')
         plt.title("Feature Importance (Gain)")
         plt.show()
+
+    def dump_features(self):
+        print(self.features)
 
     def save_model(self, path: str):
         joblib.dump(self.model, path)

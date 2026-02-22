@@ -64,6 +64,7 @@ class XGB:
         self.model = xgb.XGBRegressor(
             device="cuda",
             objective='reg:squarederror',
+            tree_method='hist',
             n_estimators=5000,
             learning_rate=0.007112277902623446,
             max_depth=8,
@@ -133,6 +134,7 @@ class lGBM:
             y_train,
             eval_set=[(X_test, y_test)],
             eval_metric='rmse',
+            categorical_feature=['market'],
             callbacks=[lgb.early_stopping(100)]
         )
 

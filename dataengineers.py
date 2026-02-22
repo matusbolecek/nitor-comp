@@ -52,12 +52,11 @@ class Dataset:
         self.df['wind_dir_cos'] = np.cos(2 * np.pi * self.df['wind_direction_80m'] / 360)
         self.df = self.df.drop('wind_direction_80m', axis=1)
         
-        le = LabelEncoder()
-        self.df['market_int'] = le.fit_transform(self.df['market'])
+        self.df['market'] = self.df['market'].astype('category')
 
     def _create_lag_features(self):
         cols_to_lag = ['renewables', 'residual']
-        lag_hours = [1, 2, 3, 6, 12, 24, 48]
+        lag_hours = [1, 2, 3, 6, 12, 24, 48, 168]
 
         for col in cols_to_lag:
             if col not in self.df.columns:
@@ -104,11 +103,3 @@ class Dataset:
         test = df.iloc[train_size:].copy()
         
         return train, test
-    
-def build_train_test_alt(df):
-
-    train_size = int(len(df) * 0.8)
-    train = df.iloc[:train_size].copy()
-    test = df.iloc[train_size:].copy()
-
-    return train, test

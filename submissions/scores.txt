@@ -1,4 +1,4 @@
 xgb_opt_old_feat - 23.05
 lgb_opt_old_feat - 23.44
-lgb_new_opt - 
+lgb_new_opt - 23.500344
 xgb_new_opt - 23.058780

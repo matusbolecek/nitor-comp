@@ -40,22 +40,34 @@ class Dataset:
             self.df[f'{col}_cos'] = np.cos(2 * np.pi * self.df[col] / max_val)
             self.df = self.df.drop(col, axis='columns')
 
+        # Renewables / residual
         self.df['renewables'] = self.df['solar_forecast'] + self.df['wind_forecast']
         self.df['renewable_ratio'] = self.df['renewables'] / (self.df['load_forecast'] + 1)
 
         self.df['residual'] = self.df['load_forecast'] - self.df['wind_forecast'] - self.df['solar_forecast']
         
+        # Cloud cover / solar interaction
+        self.df['cloud_suppression'] = (self.df['cloud_cover_low'] * 0.9 + self.df['cloud_cover_mid'] * 0.6 + self.df['cloud_cover_high'] * 0.2)
+        self.df['solar_cloud_adjusted'] = self.df['solar_forecast'] * (1 - self.df['cloud_suppression'] / 100)
+
+        # Stress
         if 'air_temperature_2m' in self.df.columns:
             self.df['cold_stress'] = self.df['air_temperature_2m'].apply(lambda x: max(0, 280 - x))
+            self.df['heat_stress'] = self.df['air_temperature_2m'].apply(lambda x: max(0, x - 295))
 
+        # Wind features
         self.df['wind_dir_sin'] = np.sin(2 * np.pi * self.df['wind_direction_80m'] / 360)
         self.df['wind_dir_cos'] = np.cos(2 * np.pi * self.df['wind_direction_80m'] / 360)
         self.df = self.df.drop('wind_direction_80m', axis=1)
+
+        self.df['wind_speed_80m_cubed'] = self.df['wind_speed_80m'] ** 3
+        self.df['wind_power_residual'] = self.df['wind_speed_80m_cubed'] - self.df['wind_forecast']
         
+        # Categorical market
         self.df['market'] = self.df['market'].astype('category')
 
     def _create_lag_features(self):
-        cols_to_lag = ['renewables', 'residual']
+        cols_to_lag = ['renewables', 'residual', 'load_forecast']
         lag_hours = [1, 2, 3, 6, 12, 24, 48, 168]
 
         for col in cols_to_lag:

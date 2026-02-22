@@ -60,23 +60,28 @@ class XGB:
         
         y_train = df_train['target']
         y_test = df_test['target']
+        
+        tuned_params = {
+            'max_depth': 9, 
+            'min_child_weight': 10, 
+            'learning_rate': 0.011041791784948136, 
+            'subsample': 0.769216997688628, 
+            'colsample_bytree': 0.3002874876389264, 
+            'colsample_bylevel': 0.68925894223455, 
+            'reg_alpha': 0.17428426292668459, 
+            'reg_lambda': 77.5689626698248, 
+            'gamma': 0.9947338308302472
+            }
 
         self.model = xgb.XGBRegressor(
             device="cuda",
             objective='reg:squarederror',
             tree_method='hist',
+            enable_categorical=True,
             n_estimators=5000,
-            learning_rate=0.007112277902623446,
-            max_depth=8,
-            subsample=0.5796806880630087,
-            colsample_bytree=0.5565687076298409,
-            colsample_bylevel=0.5811173897467319,
-            min_child_weight=3, 
-            reg_alpha=0.23393408287285775,
-            reg_lambda=9.617727386132815,
-            gamma=0.43983477413525485,
             early_stopping_rounds=100,
-            random_state=42
+            random_state=42,
+            **tuned_params
         )
 
         self.model.fit(
@@ -115,18 +120,23 @@ class lGBM:
         y_train = df_train['target']
         y_test = df_test['target']
 
+        tuned_params = {
+            'num_leaves': 111, 
+            'max_depth': 11, 
+            'learning_rate': 0.017450649341248122, 
+            'subsample': 0.7317287482536371, 
+            'subsample_freq': 1, 
+            'colsample_bytree': 0.11288101765162045, 
+            'min_split_gain': 1.0482834566823582, 
+            'reg_alpha': 2.075968543559966, 
+            'reg_lambda': 20.957202176792954, 
+            'min_child_samples': 22
+            }
+
         self.model = lgb.LGBMRegressor(
             n_estimators=5000,
-            learning_rate=0.009046593589436254,
-            num_leaves=165,
-            max_depth=-1,
-            subsample=0.9828518021601895,
-            colsample_bytree=0.6,
-            min_child_samples=20,
-            reg_alpha=0.00031766826075670324,
-            reg_lambda=7.01286005466377,
-            subsample_freq=1,
-            random_state=42
+            random_state=42,
+            **tuned_params
         )
 
         self.model.fit(
@@ -134,7 +144,6 @@ class lGBM:
             y_train,
             eval_set=[(X_test, y_test)],
             eval_metric='rmse',
-            categorical_feature=['market'],
             callbacks=[lgb.early_stopping(100)]
         )
 

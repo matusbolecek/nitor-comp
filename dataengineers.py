@@ -27,20 +27,20 @@ class Dataset:
         return self.df
 
     def _create_features(self):
+        # Time features
         self.df['hour'] = self.df['delivery_start'].dt.hour
         self.df['dayofweek'] = self.df['delivery_start'].dt.dayofweek
-        
+        self.df['month'] = self.df['delivery_start'].dt.month
         self.df['day_of_year'] = self.df['delivery_start'].dt.dayofyear
-        self.df['doy_sin'] = np.sin(2 * np.pi * self.df['day_of_year'] / 365)
-        self.df['doy_cos'] = np.cos(2 * np.pi * self.df['day_of_year'] / 365)
+        self.df['is_weekend'] = (self.df['dayofweek'] >= 5).astype(int)
 
-        for col, max_val in [('hour', 24), ('dayofweek', 7)]:
+        cyclical_features = [('hour', 24), ('dayofweek', 7), ('month', 12), ('day_of_year', 365)]
+        for col, max_val in cyclical_features:
             self.df[f'{col}_sin'] = np.sin(2 * np.pi * self.df[col] / max_val)
             self.df[f'{col}_cos'] = np.cos(2 * np.pi * self.df[col] / max_val)
+            self.df = self.df.drop(col, axis='columns')
 
         self.df['renewables'] = self.df['solar_forecast'] + self.df['wind_forecast']
-        self.df['net_load'] = self.df['load_forecast'] - self.df['renewables']
-        
         self.df['renewable_ratio'] = self.df['renewables'] / (self.df['load_forecast'] + 1)
 
         self.df['residual'] = self.df['load_forecast'] - self.df['wind_forecast'] - self.df['solar_forecast']
@@ -50,12 +50,13 @@ class Dataset:
 
         self.df['wind_dir_sin'] = np.sin(2 * np.pi * self.df['wind_direction_80m'] / 360)
         self.df['wind_dir_cos'] = np.cos(2 * np.pi * self.df['wind_direction_80m'] / 360)
+        self.df = self.df.drop('wind_direction_80m', axis=1)
         
         le = LabelEncoder()
         self.df['market_int'] = le.fit_transform(self.df['market'])
 
     def _create_lag_features(self):
-        cols_to_lag = ['wind_forecast', 'solar_forecast', 'net_load', 'load_forecast', 'renewables']
+        cols_to_lag = ['renewables', 'residual']
         lag_hours = [1, 2, 3, 6, 12, 24, 48]
 
         for col in cols_to_lag:
@@ -80,7 +81,7 @@ class Dataset:
                 )
 
     def _drop_cols(self):
-        cols_drop = ['delivery_end', 'market', 'delivery_start', 'timestamp_int']
+        cols_drop = ['delivery_end', 'market']
         self.df = self.df.drop(columns=cols_drop, errors='ignore')
 
     def build_main(self):
@@ -95,11 +96,8 @@ class Dataset:
 
         return self.df
 
-    def build_train_test(self, split_date=None):
+    def build_train_test(self, split_date=None):     
         df = self.build_main()
-        
-        if 'id' in df.columns:
-            df = df.sort_values('id') 
             
         train_size = int(len(df) * 0.8)
         train = df.iloc[:train_size].copy()

@@ -58,8 +58,8 @@ class XGB:
         X_train = df_train[self.features]
         X_test = df_test[self.features]
         
-        y_train = np.arcsinh(df_train['target']) 
-        y_test = np.arcsinh(df_test['target'])
+        y_train = df_train['target']
+        y_test = df_test['target']
 
         self.model = xgb.XGBRegressor(
             device="cuda",
@@ -84,9 +84,7 @@ class XGB:
     def predict(self, df):
         X_predict = df[self.features]
         
-        y_pred_trans = self.model.predict(X_predict)
-        
-        y_pred = np.sinh(y_pred_trans)
+        y_pred = self.model.predict(X_predict)
         
         return y_pred
 
@@ -110,8 +108,8 @@ class lGBM:
         X_train = df_train[self.features]
         X_test = df_test[self.features]
         
-        y_train = np.arcsinh(df_train['target']) 
-        y_test = np.arcsinh(df_test['target'])
+        y_train = df_train['target']
+        y_test = df_test['target']
 
         self.model = lgb.LGBMRegressor(
             n_estimators=3000,
@@ -134,9 +132,7 @@ class lGBM:
     def predict(self, df):
         X_predict = df[self.features]
         
-        y_pred_trans = self.model.predict(X_predict)
-        
-        y_pred = np.sinh(y_pred_trans)
+        y_pred = self.model.predict(X_predict)
         
         return y_pred
 

@@ -3,6 +3,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 from sklearn.linear_model import RidgeCV, LinearRegression
 import xgboost as xgb
+import lightgbm as lgb
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -93,6 +94,51 @@ class XGB:
         xgb.plot_importance(self.model, max_num_features=20, importance_type='gain')
         plt.title("Feature Importance (Gain)")
         plt.show()
+
+    def save_model(self, path: str):
+        joblib.dump(self.model, path)
+
+    def load_model(self, path: str):
+        self.model = joblib.load(path)
+
+class lGBM:
+    def __init__(self, features: list):
+        self.model = None
+        self.features = list(dict.fromkeys(features))
+
+    def fit(self, df_train, df_test):
+        X_train = df_train[self.features]
+        X_test = df_test[self.features]
+        
+        y_train = np.arcsinh(df_train['target']) 
+        y_test = np.arcsinh(df_test['target'])
+
+        self.model = lgb.LGBMRegressor(
+            n_estimators=3000,
+            learning_rate=0.01,
+            num_leaves=64,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_samples=50,
+            random_state=42
+        )
+
+        self.model.fit(
+            X_train,
+            y_train,
+            eval_set=[(X_test, y_test)],
+            eval_metric='rmse',
+            callbacks=[lgb.early_stopping(100)]
+        )
+
+    def predict(self, df):
+        X_predict = df[self.features]
+        
+        y_pred_trans = self.model.predict(X_predict)
+        
+        y_pred = np.sinh(y_pred_trans)
+        
+        return y_pred
 
     def save_model(self, path: str):
         joblib.dump(self.model, path)

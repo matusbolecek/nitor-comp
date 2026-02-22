@@ -5,7 +5,7 @@ import pandas as pd
 def rmse(actual_array, model_array):
     return np.sqrt(mean_squared_error(actual_array, model_array))
 
-class Submission():
+class Submission:
     def __init__(self, df: pd.DataFrame):
         self.df = df
 

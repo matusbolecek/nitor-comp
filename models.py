@@ -115,12 +115,16 @@ class lGBM:
         y_test = df_test['target']
 
         self.model = lgb.LGBMRegressor(
-            n_estimators=3000,
-            learning_rate=0.01,
-            num_leaves=64,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_samples=50,
+            n_estimators=5000,
+            learning_rate=0.009046593589436254,
+            num_leaves=165,
+            max_depth=-1,
+            subsample=0.9828518021601895,
+            colsample_bytree=0.6,
+            min_child_samples=20,
+            reg_alpha=0.00031766826075670324,
+            reg_lambda=7.01286005466377,
+            subsample_freq=1,
             random_state=42
         )
 
